@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/shanelabountyai/readout/prompts/narrate.schema.json",
+  "title": "write_pulse tool input (narrate-v0.1)",
+  "description": "The only output the model may return: a headline, one to four paragraphs each listing the fact ids it cites, and up to three suggestions. Word limits (15 / 180 / 30) are enforced by the checks (too_long), not by this schema; the character caps here are far above them (D-066).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["headline", "paragraphs", "suggestions"],
+  "properties": {
+    "headline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "cites"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "cites": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 64 } }
+      }
+    },
+    "paragraphs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "cites"],
+        "properties": {
+          "text": { "type": "string", "minLength": 1, "maxLength": 5000 },
+          "cites": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 64 } }
+        }
+      }
+    },
+    "suggestions": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text"],
+        "properties": { "text": { "type": "string", "minLength": 1, "maxLength": 1000 } }
+      }
+    }
+  }
+}

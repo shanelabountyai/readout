@@ -1,0 +1,21 @@
+{
+  "note": "Hand-written stand-in for the write_pulse tool input. NOT model output. usage.output_tokens is characters/4, an estimate, not a measurement.",
+  "input": {
+    "headline": {
+      "text": "The week in numbers",
+      "cites": []
+    },
+    "paragraphs": [
+      {
+        "text": "3 deals were won.",
+        "cites": [
+          "deals_won.cur"
+        ]
+      }
+    ],
+    "suggestions": []
+  },
+  "usage": {
+    "output_tokens": 36
+  }
+}

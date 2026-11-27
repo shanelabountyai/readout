@@ -1,0 +1,37 @@
+{
+  "firmName": "Tallgrass Advisory",
+  "timezone": "America/Chicago",
+  "weekStartOverride": "",
+  "demoMode": true,
+  "ownerEmail": "owner@tallgrassadvisory.example",
+  "revenueLabel": "Revenue (as entered)",
+  "pipelineId": "default",
+  "pulseFolderId": "test-folder-pulse",
+  "inputSheetId": "test-sheet-weekly",
+  "inputTab": "weekly",
+  "definitionsTab": "definitions",
+  "ledgerSheetId": "test-sheet-ledger",
+  "ledgerTab": "runs",
+  "errorsTab": "errors",
+  "wonStages": [
+    "closedwon"
+  ],
+  "lostStages": [
+    "closedlost"
+  ],
+  "hubspotMaxPages": 20,
+  "thresholds": {
+    "revenueSwingBp": 2500,
+    "cashDropBp": 1000,
+    "overdueFlagMin": 3,
+    "quietMaxNewContacts": 2
+  },
+  "model": "claude-sonnet-5-5",
+  "maxOutputTokens": 1500,
+  "weeklyCallCap": 3,
+  "perRunTokenCeiling": 20000,
+  "weeklySpendCapUsd": 1,
+  "priceInputPerMTokUsd": null,
+  "priceOutputPerMTokUsd": null,
+  "alertWebhookUrl": ""
+}

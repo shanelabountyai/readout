@@ -1,0 +1,11 @@
+{
+  "outcome": "failed",
+  "reason": "hubspot_error",
+  "modelCalls": 0,
+  "check": null,
+  "flags": [],
+  "facts": null,
+  "doc": false,
+  "draft": false,
+  "errorRow": true
+}

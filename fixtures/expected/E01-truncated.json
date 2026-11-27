@@ -1,0 +1,10 @@
+{
+  "outcome": "done",
+  "reason": "",
+  "modelCalls": 1,
+  "check": "pass",
+  "flagsInclude": [
+    "hubspot_truncated"
+  ],
+  "dataNote": "CRM read stopped at 23 records; counts may be low"
+}

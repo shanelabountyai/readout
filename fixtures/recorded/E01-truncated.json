@@ -1,0 +1,25 @@
+{
+  "note": "Hand-written stand-in for the write_pulse tool input. NOT model output. usage.output_tokens is characters/4, an estimate, not a measurement.",
+  "input": {
+    "headline": {
+      "text": "The week in numbers",
+      "cites": []
+    },
+    "paragraphs": [
+      {
+        "text": "Revenue was $46,000, up $4,000 (10%) on last week. 2 deals won for $18,000.",
+        "cites": [
+          "revenue.cur",
+          "revenue.wow_abs",
+          "revenue.wow_pct",
+          "deals_won.cur",
+          "won_amount.cur"
+        ]
+      }
+    ],
+    "suggestions": []
+  },
+  "usage": {
+    "output_tokens": 67
+  }
+}
