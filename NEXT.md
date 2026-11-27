@@ -14,13 +14,17 @@
 
 ### Gate output (local, Node v22.23.5, npm 10.9.9)
 
-- `npm ci`: ok. `npm run gate`: lint clean, `check` (workflow.json and fixtures up to date), **138 tests, 138 pass, 0 fail** (number as of the commit that wrote this file; the PR body has the final count after review fixes).
+- `npm ci`: ok. `npm run gate`: lint clean, `check` (workflow.json and fixtures up to date), **143 tests, 143 pass, 0 fail** (after the review fixes).
 - `npm run eval`: 21/21 golden weeks (incl. E01-truncated) match their expected files; 7/7 check variants give their reason.
 - Engine and expected files agreed on every week on the first run; no PRD value had to be questioned.
 
 ### Decided
 
-D-051 to D-065 (and the review and merge rows after them) in `docs/DECISIONS.md`. One differs from the PRD and needs Shane: **D-055** adds `link` and `placeholder` checks after the PRD's eleven.
+D-051 to D-068 in `docs/DECISIONS.md` (the merge call, if any, is the next row). Two need Shane: **D-055** adds `link` and `placeholder` checks after the PRD's eleven; **D-068** keeps the PRD's literal percentage on a negative base.
+
+### Independent review
+
+1 MUST-FIX (hyphen-joined words escaped the word checks), fixed; 10 SHOULD-FIX, 8 fixed (D-066, D-067), 2 left: the workflow error path's ledger row / `$('config')` / `errorWorkflow` id (Phase 2, item 6) and percentages on a negative base (D-068).
 
 ### Left open for Phase 2
 
