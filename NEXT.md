@@ -20,7 +20,7 @@
 
 ### Decided
 
-D-051 to D-068 in `docs/DECISIONS.md` (the merge call, if any, is the next row). Two need Shane: **D-055** adds `link` and `placeholder` checks after the PRD's eleven; **D-068** keeps the PRD's literal percentage on a negative base.
+D-051 to D-069 in `docs/DECISIONS.md` (D-069 records the merge call). Two need Shane: **D-055** adds `link` and `placeholder` checks after the PRD's eleven; **D-068** keeps the PRD's literal percentage on a negative base.
 
 ### Independent review
 
