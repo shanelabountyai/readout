@@ -1,0 +1,122 @@
+[
+  {
+    "id": "E01",
+    "title": "Normal week",
+    "outcome": "done",
+    "reason": ""
+  },
+  {
+    "id": "E02",
+    "title": "Quiet week: template, no model call",
+    "outcome": "done",
+    "reason": ""
+  },
+  {
+    "id": "E03",
+    "title": "Sheet row missing; narrative names the gap",
+    "outcome": "done",
+    "reason": ""
+  },
+  {
+    "id": "E04",
+    "title": "Sheet row missing; model invents revenue",
+    "outcome": "metrics_only",
+    "reason": "number_not_in_metrics"
+  },
+  {
+    "id": "E05",
+    "title": "Right number, wrong cited fact",
+    "outcome": "metrics_only",
+    "reason": "number_not_in_cited_facts"
+  },
+  {
+    "id": "E06",
+    "title": "Number in no metric",
+    "outcome": "metrics_only",
+    "reason": "number_not_in_metrics"
+  },
+  {
+    "id": "E07",
+    "title": "Fractional 4-week average (8.25 shows as 8.3)",
+    "outcome": "metrics_only",
+    "reason": "number_not_in_metrics"
+  },
+  {
+    "id": "E08",
+    "title": "Stalled deal (11 > 10) and boundary (21 = 21, not stalled)",
+    "outcome": "done",
+    "reason": ""
+  },
+  {
+    "id": "E09",
+    "title": "Revenue swing flag; narrative direction wrong",
+    "outcome": "metrics_only",
+    "reason": "direction_mismatch"
+  },
+  {
+    "id": "E10",
+    "title": "Cash drop and overdue tasks flags",
+    "outcome": "done",
+    "reason": ""
+  },
+  {
+    "id": "E11",
+    "title": "Advice in a paragraph",
+    "outcome": "metrics_only",
+    "reason": "advice_in_facts"
+  },
+  {
+    "id": "E12",
+    "title": "Advice as a labelled suggestion",
+    "outcome": "done",
+    "reason": ""
+  },
+  {
+    "id": "E13",
+    "title": "Causal claim",
+    "outcome": "metrics_only",
+    "reason": "causal_claim"
+  },
+  {
+    "id": "E14",
+    "title": "Short sheet history; cites a missing average",
+    "outcome": "metrics_only",
+    "reason": "cited_fact_missing"
+  },
+  {
+    "id": "E15",
+    "title": "Zero base: no week-over-week percentage",
+    "outcome": "metrics_only",
+    "reason": "cited_fact_missing"
+  },
+  {
+    "id": "E16",
+    "title": "Weekly call cap reached",
+    "outcome": "metrics_only",
+    "reason": "weekly_cap"
+  },
+  {
+    "id": "E17",
+    "title": "Re-run updates Doc and draft in place",
+    "outcome": "done",
+    "reason": ""
+  },
+  {
+    "id": "E18",
+    "title": "Demo guard excludes a .test contact",
+    "outcome": "done",
+    "reason": ""
+  },
+  {
+    "id": "E19",
+    "title": "Invalid sheet cell 46k",
+    "outcome": "done",
+    "reason": ""
+  },
+  {
+    "id": "E20",
+    "title": "HubSpot fails 3 times",
+    "outcome": "failed",
+    "reason": "hubspot_error"
+  }
+]

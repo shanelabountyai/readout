@@ -1,0 +1,22 @@
+{
+  "note": "Hand-written stand-in for the write_pulse tool input. NOT model output. usage.output_tokens is characters/4, an estimate, not a measurement.",
+  "input": {
+    "headline": {
+      "text": "The week in numbers",
+      "cites": []
+    },
+    "paragraphs": [
+      {
+        "text": "1 deal has stalled: Bluewater fleet reporting, idle 11 days in contract.",
+        "cites": [
+          "stalled_deals.cur",
+          "stalled.1.idle_days"
+        ]
+      }
+    ],
+    "suggestions": []
+  },
+  "usage": {
+    "output_tokens": 56
+  }
+}
