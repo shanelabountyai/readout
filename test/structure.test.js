@@ -7,7 +7,7 @@ const path = require('path');
 
 const SRC = path.join(__dirname, '..', 'src');
 const files = fs.readdirSync(SRC).filter((f) => f.endsWith('.js'));
-const code = (f) => fs.readFileSync(path.join(SRC, f), 'utf8').replace(/\/\/.*$/gm, '');
+const code = (f) => fs.readFileSync(path.join(SRC, f), 'utf8').split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
 
 test('AC-04: no Math.round, parseFloat or toFixed in src/ outside src/num.js', () => {
   for (const f of files.filter((x) => x !== 'num.js')) {
@@ -17,7 +17,10 @@ test('AC-04: no Math.round, parseFloat or toFixed in src/ outside src/num.js', (
 });
 
 test('src/ never reads the clock: no Date.now( and no argument-less new Date()', () => {
-  for (const f of files) assert.doesNotMatch(code(f), /Date\.now\(|new Date\(\s*\)/, f);
+  for (const f of files) {
+    assert.doesNotMatch(code(f), /Date\.now\(|new Date\(\s*\)/, f);
+    assert.doesNotMatch(code(f), /(?<!new\s)(?<![.\w])Date\(\s*\)/, f);
+  }
 });
 
 test('src/ requires only other src/ modules (it runs inside n8n Code nodes)', () => {

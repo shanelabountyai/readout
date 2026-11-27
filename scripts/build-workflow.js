@@ -162,7 +162,8 @@ const computed = $('Compute').first().json;
 const draftState = { update: 'updated', create: 'created', gone: 'gone', skip: 'skipped' }[d.action];
 const reason = r.reason || (d.action === 'skip' ? d.skip : '');
 const modelCalls = computed.modelNeeded ? 1 : 0;
-const row = M.steps.record({ cfg, plan: p, computed, status: r.status, reason, docId: d.docId, draftId: d.draftId || '', draftState, modelCalls, usage: null, runtimeS: 0 });
+const draftId = d.action === 'create' ? String(($('Create draft').first().json || {}).id || '') : (d.draftId || '');
+const row = M.steps.record({ cfg, plan: p, computed, status: r.status, reason, docId: d.docId, draftId, draftState, modelCalls, usage: null, runtimeS: 0 });
 return [{ json: { row } }];
 `);
   http('Append ledger', [3240, 80], 'drive', {

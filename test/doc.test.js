@@ -44,6 +44,19 @@ test('AC-08: E16 (cap) shows the code headline and the withheld line in plain wo
   }
 });
 
+test('AC-08: every metrics_only week with a stand-in shows none of its own stand-in text', () => {
+  let n = 0;
+  for (const id of ['E04', 'E05', 'E06', 'E07', 'E09', 'E11', 'E13', 'E14', 'E15']) {
+    const r = H.runWeek(id);
+    assert.strictEqual(r.outcome, 'metrics_only', id);
+    const s = H.loadRecorded(id).input;
+    for (const t of [...s.paragraphs.map((x) => x.text), ...s.suggestions.map((x) => x.text)]) { assert.ok(!r.docHtml.includes(D.esc(t)), `${id}: ${t}`); assert.ok(!r.draft.body.includes(t), `${id} draft`); }
+    assert.ok(!r.docHtml.includes('<h1>The week in numbers</h1>'), id);
+    n++;
+  }
+  assert.strictEqual(n, 9);
+});
+
 test('AC-08: a failed check (E09) yields code headline, numbers table, Watch list and withheld line; no model text', () => {
   const r = H.runWeek('E09');
   const s = H.loadRecorded('E09').input;

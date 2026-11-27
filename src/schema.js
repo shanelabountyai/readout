@@ -26,7 +26,7 @@ function validatePulse(o) {
   keysExactly(o, ['headline', 'paragraphs', 'suggestions'], 'root', errors);
   if ('headline' in o) {
     if (!isObj(o.headline)) errors.push('headline: not an object');
-    else { keysExactly(o.headline, ['text', 'cites'], 'headline', errors); str(o.headline.text, 200, 'headline.text', errors); cites(o.headline.cites, 'headline.cites', errors); }
+    else { keysExactly(o.headline, ['text', 'cites'], 'headline', errors); str(o.headline.text, 1000, 'headline.text', errors); cites(o.headline.cites, 'headline.cites', errors); }
   }
   if ('paragraphs' in o) {
     if (!Array.isArray(o.paragraphs)) errors.push('paragraphs: not an array');
@@ -35,7 +35,7 @@ function validatePulse(o) {
       o.paragraphs.forEach((p, i) => {
         if (!isObj(p)) { errors.push(`paragraphs[${i}]: not an object`); return; }
         keysExactly(p, ['text', 'cites'], `paragraphs[${i}]`, errors);
-        str(p.text, 1500, `paragraphs[${i}].text`, errors);
+        str(p.text, 5000, `paragraphs[${i}].text`, errors);
         cites(p.cites, `paragraphs[${i}].cites`, errors);
       });
     }
@@ -47,7 +47,7 @@ function validatePulse(o) {
       o.suggestions.forEach((s, i) => {
         if (!isObj(s)) { errors.push(`suggestions[${i}]: not an object`); return; }
         keysExactly(s, ['text'], `suggestions[${i}]`, errors);
-        str(s.text, 300, `suggestions[${i}].text`, errors);
+        str(s.text, 1000, `suggestions[${i}].text`, errors);
       });
     }
   }

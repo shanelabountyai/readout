@@ -24,9 +24,13 @@ const PLACEHOLDER_RE = /\[[^\]]*\]|\{\{|\}\}|<[^>\s][^>]*>|\b(?:TODO|TBD|TKTK|XX
 
 const TOKEN_RE = /([+\-−])?(\$)?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(%)?/g;
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const wordRe = (list) => new RegExp(`(?<![A-Za-z0-9-])(?:${list.map(esc).join('|')})(?![A-Za-z0-9-])`, 'i');
-const RISE_RE = wordRe(RISE_WORDS);
-const FALL_RE = wordRe(FALL_WORDS);
+// A hyphen does not join words for these lists ("twenty-five", "record-high", "must-win" all match), and a
+// phrase matches across any whitespace (D-066). Direction words keep the hyphen guard so "follow-up" is not "up".
+const phrase = (w) => w.split(' ').map(esc).join('\\s+');
+const wordRe = (list) => new RegExp(`(?<![A-Za-z0-9])(?:${list.map(phrase).join('|')})(?![A-Za-z0-9])`, 'i');
+const directionRe = (list) => new RegExp(`(?<![A-Za-z0-9-])(?:${list.map(esc).join('|')})(?![A-Za-z0-9-])`, 'i');
+const RISE_RE = directionRe(RISE_WORDS);
+const FALL_RE = directionRe(FALL_WORDS);
 const SPELLED_RE = wordRe(SPELLED_NUMBERS);
 const ADVICE_RE = wordRe(ADVICE_WORDS);
 const CAUSAL_RE = wordRe(CAUSAL_WORDS);
@@ -100,7 +104,7 @@ function check(narrative, facts, stalledNames = []) {
           if (t.sign !== 0 && m.length && m.every((f) => f.sign !== t.sign)) fail('direction_mismatch', p.part, t.raw);
         }
       }
-    } else if (/\d/.test(p.text)) fail('number_in_suggestion', p.part); // 7
+    } else if (/\d/.test(clean)) fail('number_in_suggestion', p.part); // 7
     if (SPELLED_RE.test(clean)) fail('spelled_number', p.part); // 8
     if (p.prose && ADVICE_RE.test(clean)) fail('advice_in_facts', p.part); // 9
     if (CAUSAL_RE.test(clean)) fail('causal_claim', p.part); // 10

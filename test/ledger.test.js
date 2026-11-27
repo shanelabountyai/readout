@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const L = require('../src/ledger');
 const H = require('./harness');
 
-const ok = () => ({ run_id: 'run-1', week_start: '2026-11-16', status: 'done', reason: '', flags: 'stalled_deals|overdue_tasks', doc_id: 'D1', draft_id: 'r-123', draft_state: 'created', prompt_version: 'narrate-v0.1', model: 'claude-sonnet-5-5', model_calls: 1, input_tokens: 3000, output_tokens: 200, cost_usd: '', runtime_s: 12, run_at: '2026-11-23T16:00:00Z' });
+const ok = () => ({ run_id: 'run-20261123160000', week_start: '2026-11-16', status: 'done', reason: '', flags: 'stalled_deals|overdue_tasks', doc_id: 'D1', draft_id: 'r-123', draft_state: 'created', prompt_version: 'narrate-v0.1', model: 'claude-sonnet-5-5', model_calls: 1, input_tokens: 3000, output_tokens: 200, cost_usd: '', runtime_s: 12, run_at: '2026-11-23T16:00:00Z' });
 
 test('AC-12: a valid row is the 16 columns in order', () => {
   assert.strictEqual(L.buildRow(ok()).length, 16);
@@ -16,6 +16,8 @@ test('AC-12: refuses a dollar amount in reason, a name in doc_id, an unknown col
   const bad = {
     'dollar amount in reason': { reason: '$46,000' },
     'name in doc_id': { doc_id: '[demo] Bluewater fleet reporting' },
+    'bare word in doc_id': { doc_id: 'Bluewater' },
+    'name as run_id': { run_id: 'Smith' },
     'email in draft_id': { draft_id: 'owner@tallgrassadvisory.example' },
     'unknown flag code': { flags: 'stalled_deals|Bluewater' },
     'free text status': { status: 'great week' },

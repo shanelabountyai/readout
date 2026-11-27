@@ -102,6 +102,26 @@ test('word lists are whole words, case-insensitive; "one" and "none" allowed; su
   assert.strictEqual(chk(one('Revenue was $46,000; focus on renewals.', ['revenue.cur'])).reason, 'advice_in_facts');
 });
 
+test('D-066: hyphen-joined words are whole words for spelled, unverifiable, advice and causal lists; phrases span whitespace', () => {
+  assert.strictEqual(chk(one('Revenue rose twenty-five percent on last week.', [])).reason, 'spelled_number');
+  assert.strictEqual(chk(one('Revenue was $46,000, a record-high.', ['revenue.cur'])).reason, 'unverifiable_claim');
+  assert.strictEqual(chk(one('This is a must-win renewal.', [])).reason, 'advice_in_facts');
+  assert.strictEqual(chk(one('Revenue moved due\nto billing.', [])).reason, 'causal_claim');
+  assert.strictEqual(chk(one('We need   to call.', [])).reason, 'advice_in_facts');
+  assert.ok(chk(one('A follow-up was booked for 1 deal lost, down from last week.', ['deals_lost.cur'])).pass, 'direction words keep the hyphen guard');
+});
+
+test('too_long, not schema, for a long paragraph (character caps sit far above the word limits)', () => {
+  const c = chk(one(Array(300).fill('word').join(' '), []));
+  assert.strictEqual(c.reason, 'too_long');
+});
+
+test('number_in_suggestion scans the stripped text: a 4-week mention or a stalled name with a digit is not a number', () => {
+  assert.ok(chk(one('Fine.', [], [{ text: 'Review the four-week trend with the team.' }])).pass);
+  const facts = E01.facts;
+  assert.ok(C.check(one('Fine.', [], [{ text: 'Call the Route 9 Logistics contact.' }]), facts, ['[demo] Route 9 Logistics']).pass);
+});
+
 test('D-055: links and placeholders fail in any part; a stalled [demo] name is not a placeholder', () => {
   assert.strictEqual(chk(one('Fine.', [], [{ text: 'See www.tallgrass.example for detail.' }])).reason, 'link');
   assert.strictEqual(chk(one('Revenue was $46,000 for {{client}}.', ['revenue.cur'])).reason, 'placeholder');

@@ -7,6 +7,7 @@ const week = require('./week');
 
 const MAX_EXTRAS = 5;
 const KEY_RE = /^[a-z][a-z0-9_]{0,30}$/;
+const LABEL_RE = /^[A-Za-z0-9 ()&/.-]{1,40}$/; // labels reach the model: short, plain, no free text (D-066)
 
 function parseDefinitions(values) {
   const issues = [];
@@ -15,13 +16,13 @@ function parseDefinitions(values) {
   for (const r of rows) {
     const [key, label, unit] = (r || []).map((c) => String(c ?? '').trim());
     if (!key) continue;
-    if (!KEY_RE.test(key) || !['usd', 'count'].includes(unit) || ['revenue', 'cash', 'week_start', 'revenue_usd', 'cash_usd'].includes(key)) {
+    if (!KEY_RE.test(key) || !LABEL_RE.test(label || key) || !['usd', 'count'].includes(unit) || ['revenue', 'cash', 'week_start', 'revenue_usd', 'cash_usd'].includes(key)) {
       issues.push({ code: 'sheet_invalid', metric: 'definitions', weekStart: null });
       continue;
     }
     if (defs.some((d) => d.key === key)) continue;
     if (defs.length >= MAX_EXTRAS) { issues.push({ code: 'sheet_invalid', metric: 'definitions', weekStart: null }); continue; }
-    defs.push({ key, label: (label || key).slice(0, 60), unit });
+    defs.push({ key, label: label || key, unit });
   }
   return { defs, issues };
 }
