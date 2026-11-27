@@ -1,0 +1,22 @@
+{
+  "name": "readout",
+  "version": "0.1.0",
+  "private": true,
+  "description": "N3 Weekly Business Pulse: an n8n workflow that drafts a one-page weekly read of the business from HubSpot (read-only) and a hand-entered Google Sheet. Drafts only; never sends.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build-workflow.js && node fixtures/build.js",
+    "check": "node scripts/build-workflow.js --check && node fixtures/build.js --check",
+    "lint": "eslint .",
+    "test": "node --test test/*.test.js",
+    "eval": "node scripts/eval.js",
+    "gate": "npm run lint && npm run check && npm test"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "eslint": "^9.39.1",
+    "@eslint/js": "^9.39.1",
+    "globals": "^16.5.0"
+  }
+}
