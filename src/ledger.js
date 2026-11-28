@@ -6,7 +6,7 @@ const flags = require('./flags');
 
 const COLUMNS = ['run_id', 'week_start', 'status', 'reason', 'flags', 'doc_id', 'draft_id', 'draft_state', 'prompt_version', 'model', 'model_calls', 'input_tokens', 'output_tokens', 'cost_usd', 'runtime_s', 'run_at'];
 const STATUS = ['done', 'metrics_only', 'failed'];
-const REASONS = ['', ...checks.REASONS, 'template_check', 'weekly_cap', 'token_ceiling', 'spend_cap', 'hubspot_error', 'sheet_error', 'drive_error', 'gmail_error', 'model_error', 'demo_guard_recipient'];
+const REASONS = ['', ...checks.REASONS, 'template_check', 'weekly_cap', 'token_ceiling', 'spend_cap', 'hubspot_error', 'sheet_error', 'drive_error', 'gmail_error', 'model_error', 'unknown_error', 'demo_guard_recipient'];
 const DRAFT_STATES = ['', 'created', 'updated', 'gone', 'skipped'];
 
 const ID_RE = /^$|^(?=.*\d)[A-Za-z0-9_-]{2,128}$/; // empty, or an id with at least one digit (a bare word is refused)

@@ -1,8 +1,8 @@
 'use strict';
-// Generates workflow.json (the n8n export, Phase 1 skeleton) from src/*.js, prompts/, rules/ and
-// config/config.template.json. Code nodes inline the tested src/ modules (N7's bundle pattern), so the
-// workflow runs exactly the code the tests run. External nodes carry placeholder parameters, noted
-// "Phase 2". Never hand-edit workflow.json; test/workflow.test.js and `npm run check` catch drift.
+// Generates workflow.json (the n8n export) from src/*.js, prompts/, rules/ and config/config.template.json.
+// Code nodes inline the tested src/ modules (N7's bundle pattern), so the workflow runs exactly the code the
+// tests run; test/n8n-sim.js executes this file against in-memory fakes. External node parameters follow the
+// node source of n8n-nodes-base 2.49.8 (D-072). Never hand-edit workflow.json; `npm run check` catches drift.
 // Usage: node scripts/build-workflow.js           (write workflow.json)
 //        node scripts/build-workflow.js --check   (exit 1 if workflow.json is out of date)
 const fs = require('fs');
@@ -11,8 +11,12 @@ const { loadPrompts } = require('./prompts');
 
 const ROOT = path.join(__dirname, '..');
 const WORKFLOW_ID = 'n3WeeklyBusinessPulse';
-const MODULES = ['num', 'week', 'hubspot', 'sheet', 'metrics', 'compare', 'flags', 'facts', 'prompt', 'schema', 'checks', 'template', 'doc', 'email', 'ledger', 'spend', 'steps'];
-const PHASE2 = 'Phase 2: parameters are placeholders until the wiring phase (docs/IMPLEMENTATION_PLAN.md).';
+const MODULES = ['num', 'week', 'hubspot', 'sheet', 'metrics', 'compare', 'flags', 'facts', 'prompt', 'schema', 'checks', 'template', 'doc', 'email', 'ledger', 'spend', 'mime', 'steps'];
+// Node settings (D-071): reads try 3 times, then continue with an error item that the next Code node routes
+// to a failed run; writes that could duplicate (Create Doc, Create draft, the model call) are tried once.
+const READ = { retryOnFail: true, maxTries: 3, waitBetweenTries: 3000, onError: 'continueRegularOutput', executeOnce: true };
+const ONCE = { retryOnFail: false, onError: 'continueRegularOutput', executeOnce: true };
+const ANTHROPIC_VERSION = '2023-06-01';
 
 // Credentials (D-021): names only; ids are placeholders n8n asks you to map on import.
 const CRED = {
@@ -27,7 +31,7 @@ function bundle() {
   let out = 'const __nodeRequire = require;\nconst __lib = {};\n';
   out += "const __load = (name, fn) => { const module = { exports: {} }; fn(module, module.exports, (p) => (p.startsWith('./') ? __lib[p] : __nodeRequire(p))); __lib['./' + name] = module.exports; };\n";
   for (const m of MODULES) out += `__load('${m}', function (module, exports, require) {\n${fs.readFileSync(path.join(ROOT, 'src', `${m}.js`), 'utf8')}\n});\n`;
-  return out + "const M = { steps: __lib['./steps'], prompt: __lib['./prompt'] };\n";
+  return out + "const M = { steps: __lib['./steps'], prompt: __lib['./prompt'], hubspot: __lib['./hubspot'] };\n";
 }
 
 function build() {
@@ -54,133 +58,222 @@ function build() {
     },
     looseTypeValidation: true, options: {},
   });
-  const http = (name, position, cred, { method = 'GET', url, query, json } = {}) => {
-    const p = { method, url, authentication: 'predefinedCredentialType', nodeCredentialType: CRED_TYPE[cred] };
+  // HTTP Request 4.2 (parameter names checked against n8n-nodes-base 2.49.8, HttpRequest/V3/Description.js).
+  const http = (name, position, cred, { method = 'GET', url, query, headers, json, raw, rawType, options = {} } = {}, settings = READ) => {
+    const p = { method, url };
+    if (cred) Object.assign(p, { authentication: 'predefinedCredentialType', nodeCredentialType: CRED_TYPE[cred] });
+    else p.authentication = 'none';
     if (query) { p.sendQuery = true; p.queryParameters = { parameters: Object.entries(query).map(([n, value]) => ({ name: n, value })) }; }
+    if (headers) { p.sendHeaders = true; p.headerParameters = { parameters: Object.entries(headers).map(([n, value]) => ({ name: n, value })) }; }
     if (json) { p.sendBody = true; p.specifyBody = 'json'; p.jsonBody = json; }
-    p.options = {};
-    return node(name, 'n8n-nodes-base.httpRequest', 4.2, position, p, { credentials: CRED[cred], notes: PHASE2 });
+    if (raw) { p.sendBody = true; p.contentType = 'raw'; p.rawContentType = rawType; p.body = raw; }
+    p.options = options;
+    return node(name, 'n8n-nodes-base.httpRequest', 4.2, position, p, { ...(cred ? { credentials: CRED[cred] } : {}), ...settings });
   };
+  const FULL = { response: { response: { fullResponse: true, neverError: true } } };
   const sheetsGet = (name, position, idKey, tabKey, range) => http(name, position, 'drive', {
     url: `={{ 'https://sheets.googleapis.com/v4/spreadsheets/' + $('config').first().json.${idKey} + '/values/' + encodeURIComponent($('config').first().json.${tabKey} + '!${range}') + '?valueRenderOption=FORMATTED_VALUE' }}`,
   });
-  const hubspotGet = (name, position, object, properties, extraQuery = {}) => http(name, position, 'hubspot', {
-    url: `https://api.hubapi.com/crm/v3/objects/${object}`, query: { limit: '100', properties, archived: 'false', ...extraQuery },
+  // Paged list read (D-025, D-072): the node follows paging.next.after until a page has none, or Max Pages.
+  const hubspotGet = (name, position, object, properties, limit, extraQuery = {}) => http(name, position, 'hubspot', {
+    url: `https://api.hubapi.com/crm/v3/objects/${object}`, query: { limit, properties, archived: 'false', ...extraQuery },
+    options: {
+      pagination: {
+        pagination: {
+          paginationMode: 'updateAParameterInEachRequest',
+          parameters: { parameters: [{ type: 'qs', name: 'after', value: '={{ $response.body.paging.next.after }}' }] },
+          paginationCompleteWhen: 'other',
+          completeExpression: '={{ !$response.body.paging || !$response.body.paging.next }}',
+          limitPagesFetched: true,
+          maxRequests: cfg.hubspotMaxPages,
+          requestInterval: 100,
+        },
+      },
+    },
   });
+  const append = (name, position, tabKey, range, rowExpr, settings) => http(name, position, 'drive', {
+    method: 'POST',
+    url: `={{ 'https://sheets.googleapis.com/v4/spreadsheets/' + $('config').first().json.ledgerSheetId + '/values/' + encodeURIComponent($('config').first().json.${tabKey} + '!${range}') + ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS' }}`,
+    json: `={{ JSON.stringify({ values: [${rowExpr}] }) }}`,
+  }, settings);
 
   // ---------------- triggers and the only account-specific node
   node('Schedule (Mon 10:00 America/Chicago)', 'n8n-nodes-base.scheduleTrigger', 1.2, [-1600, -100], { rule: { interval: [{ field: 'weeks', weeksInterval: 1, triggerAtDay: [1], triggerAtHour: 10, triggerAtMinute: 0 }] } });
   node('Manual', 'n8n-nodes-base.manualTrigger', 1, [-1600, 100], {});
+  node('Error Trigger', 'n8n-nodes-base.errorTrigger', 1, [-1600, 300], {});
   code('config', [-1380, 0], `
-// THE ONLY ACCOUNT-SPECIFIC NODE (CLAUDE.md). Fill in the REPLACE_WITH_ values in Phase 3 (docs/SETUP.md, Phase 2).
+// THE ONLY ACCOUNT-SPECIFIC NODE (CLAUDE.md). Fill in the REPLACE_WITH_ values (docs/SETUP.md).
 const cfg = ${JSON.stringify(cfg, null, 2)};
-return [{ json: { ...cfg, _runAt: new Date().toISOString() } }];
+// The Error Trigger also feeds this node, so the error path reads the same config (D-073).
+// The switch is which trigger ran, not the payload's shape (a trigger failure carries no "execution", D-079).
+const t = $input.first().json || {};
+const ex = t.execution || {};
+const _error = $('Error Trigger').isExecuted ? { node: String(ex.lastNodeExecuted || (t.trigger ? 'trigger' : '')), executionId: String(ex.id || '') } : null;
+return [{ json: { ...cfg, _runAt: new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z'), _error } }];
 `, { lib: false });
   link('Schedule (Mon 10:00 America/Chicago)', 'config');
   link('Manual', 'config');
+  link('Error Trigger', 'config');
+  ifNode('Error run?', [-1160, 0], '={{ !!$json._error }}');
+  link('config', 'Error run?');
 
-  // ---------------- plan, read, compute
-  sheetsGet('Read ledger', [-1160, 0], 'ledgerSheetId', 'ledgerTab', 'A:P');
-  code('Plan', [-940, 0], `
+  // ---------------- plan, read (each read: 3 tries, then an error item), compute
+  sheetsGet('Read ledger', [-940, 0], 'ledgerSheetId', 'ledgerTab', 'A:P');
+  code('Plan', [-720, 0], `
 const cfg = $('config').first().json;
 const ledger = $('Read ledger').first().json;
-return [{ json: M.steps.plan({ cfg, runAtIso: cfg._runAt, ledgerValues: ledger.values || [] }) }];
+return [{ json: M.steps.plan({ cfg, runAtIso: cfg._runAt, ledgerValues: M.steps.isError(ledger) ? [] : ledger.values || [] }) }];
 `);
-  hubspotGet('Read HubSpot deals', [-720, 0], 'deals', 'dealname,dealstage,pipeline,amount,createdate,closedate,notes_last_updated', { propertiesWithHistory: 'dealstage' });
-  hubspotGet('Read HubSpot contacts', [-500, 0], 'contacts', 'email,createdate');
-  hubspotGet('Read HubSpot tasks', [-280, 0], 'tasks', 'hs_task_subject,hs_task_status,hs_timestamp');
-  sheetsGet('Read weekly sheet', [-60, 0], 'inputSheetId', 'inputTab', 'A:H');
-  sheetsGet('Read definitions', [160, 0], 'inputSheetId', 'definitionsTab', 'A:C');
-  code('Normalise', [380, 0], `
-// Phase 2 replaces the single page per object with paged reads up to cfg.hubspotMaxPages.
+  hubspotGet('Read HubSpot deals', [-500, 0], 'deals', 'dealname,dealstage,pipeline,amount,createdate,closedate,notes_last_updated', '50', { propertiesWithHistory: 'dealstage' });
+  hubspotGet('Read HubSpot contacts', [-280, 0], 'contacts', 'email,createdate', '100');
+  hubspotGet('Read HubSpot tasks', [-60, 0], 'tasks', 'hs_task_subject,hs_task_status,hs_timestamp', '100');
+  sheetsGet('Read weekly sheet', [160, 0], 'inputSheetId', 'inputTab', 'A:H');
+  sheetsGet('Read definitions', [380, 0], 'inputSheetId', 'definitionsTab', 'A:C');
+  code('Normalise', [600, 0], `
 const cfg = $('config').first().json;
 const p = $('Plan').first().json;
-const page = (n) => { const j = $(n).first().json; return { records: j.results || [], truncated: !!(j.paging && j.paging.next) }; };
-const d = page('Read HubSpot deals'); const c = page('Read HubSpot contacts'); const t = page('Read HubSpot tasks');
+const first = (n) => $(n).first().json;
+const failure = M.steps.sourceFailure([
+  ['Read ledger', first('Read ledger'), 'sheet_error'],
+  ['Read HubSpot deals', first('Read HubSpot deals'), 'hubspot_error'],
+  ['Read HubSpot contacts', first('Read HubSpot contacts'), 'hubspot_error'],
+  ['Read HubSpot tasks', first('Read HubSpot tasks'), 'hubspot_error'],
+  ['Read weekly sheet', first('Read weekly sheet'), 'sheet_error'],
+  ['Read definitions', first('Read definitions'), 'sheet_error'],
+]);
+if (failure) return [{ json: { failure } }];
+const paged = (n) => M.hubspot.fromPagedRead($(n).all().map((i) => i.json), cfg.hubspotMaxPages);
+const d = paged('Read HubSpot deals'); const c = paged('Read HubSpot contacts'); const t = paged('Read HubSpot tasks');
 const hubspotRaw = { deals: d.records, contacts: c.records, tasks: t.records,
   truncated: { deals: d.truncated, contacts: c.truncated, tasks: t.truncated, readCounts: { deals: d.records.length, contacts: c.records.length, tasks: t.records.length } } };
-const sheetValues = { weekly: $('Read weekly sheet').first().json.values || [], definitions: $('Read definitions').first().json.values || [] };
-return [{ json: M.steps.normalise({ cfg, plan: p, hubspotRaw, sheetValues }) }];
+const sheetValues = { weekly: first('Read weekly sheet').values || [], definitions: first('Read definitions').values || [] };
+return [{ json: { failure: null, ...M.steps.normalise({ cfg, plan: p, hubspotRaw, sheetValues }) } }];
 `);
-  code('Compute', [600, 0], `
+  ifNode('Sources ok?', [820, 0], '={{ !$json.failure }}');
+  code('Compute', [1040, -100], `
 const cfg = $('config').first().json;
 return [{ json: M.steps.compute({ cfg, plan: $('Plan').first().json, norm: $('Normalise').first().json, rules: RULES, prompts: PROMPTS }) }];
 `);
-  ifNode('Model needed?', [820, 0], '={{ $json.modelNeeded }}');
-  http('Anthropic', [1040, -120], 'anthropic', {
-    method: 'POST', url: 'https://api.anthropic.com/v1/messages', json: "={{ JSON.stringify($('Compute').first().json.request.body) }}",
-  });
-  code('Review', [1260, 0], `
+  ifNode('Model needed?', [1260, -100], '={{ $json.modelNeeded }}');
+  // One call, no retry (D-012, D-062); a failure continues as an error item and becomes model_error.
+  http('Anthropic', [1480, -220], 'anthropic', {
+    method: 'POST', url: 'https://api.anthropic.com/v1/messages', headers: { 'anthropic-version': ANTHROPIC_VERSION },
+    json: "={{ JSON.stringify($('Compute').first().json.request.body) }}",
+  }, ONCE);
+  code('Review', [1700, -100], `
 const computed = $('Compute').first().json;
 let toolInput = null; let modelError = false;
 if (computed.modelNeeded) {
   const resp = $('Anthropic').first().json;
-  modelError = !resp || !!resp.error;
+  modelError = M.steps.isError(resp);
   toolInput = modelError ? null : M.prompt.toolInput(resp);
 }
 return [{ json: M.steps.review({ computed, toolInput, modelError }) }];
 `);
-  code('Render', [1480, 0], `
+  code('Render', [1920, -100], `
 const cfg = $('config').first().json;
-return [{ json: M.steps.render({ cfg, plan: $('Plan').first().json, computed: $('Compute').first().json, reviewed: $('Review').first().json }) }];
+const rendered = M.steps.render({ cfg, plan: $('Plan').first().json, computed: $('Compute').first().json, reviewed: $('Review').first().json });
+return [{ json: { ...rendered, upload: M.steps.docBodies({ cfg, rendered }) } }];
 `);
-  ifNode('Doc exists?', [1700, 0], "={{ !!$('Plan').first().json.prior.docId }}");
-  http('Update Doc', [1920, -120], 'drive', {
-    method: 'PATCH', url: "={{ 'https://www.googleapis.com/upload/drive/v3/files/' + $('Plan').first().json.prior.docId + '?uploadType=multipart&supportsAllDrives=true' }}",
-    json: "={{ JSON.stringify({ name: $('Render').first().json.title }) }}",
-  });
-  http('Create Doc', [1920, 120], 'drive', {
-    method: 'POST', url: 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true',
-    json: "={{ JSON.stringify({ name: $('Render').first().json.title, mimeType: 'application/vnd.google-apps.document', parents: [$('config').first().json.pulseFolderId] }) }}",
-  });
-  code('Draft', [2140, 0], `
-const cfg = $('config').first().json;
-const p = $('Plan').first().json;
-const doc = $input.first().json;
-const docId = p.prior.docId || doc.id;
-const mail = M.steps.draft({ cfg, plan: p, computed: $('Compute').first().json, rendered: $('Render').first().json, docLink: 'https://docs.google.com/document/d/' + docId + '/edit' });
-const action = p.prior.draftState === 'gone' ? 'gone' : mail.skip ? 'skip' : p.prior.draftId ? 'update' : 'create';
-return [{ json: { ...mail, docId, action, draftId: p.prior.draftId } }];
-`);
-  ifNode('Update draft?', [2360, 0], "={{ $json.action === 'update' }}");
-  http('Update draft', [2580, -160], 'gmail', {
-    method: 'PUT', url: "={{ 'https://gmail.googleapis.com/gmail/v1/users/me/drafts/' + $('Draft').first().json.draftId }}",
-    json: "={{ JSON.stringify({ id: $('Draft').first().json.draftId }) }}", // Phase 2: add message.raw (RFC 822, base64url) built from to/subject/body
-  });
-  ifNode('Create draft?', [2580, 80], "={{ $json.action === 'create' }}");
-  node('Create draft', 'n8n-nodes-base.gmail', 2.1, [2800, 0], {
-    resource: 'draft', operation: 'create', subject: '={{ $json.subject }}', emailType: 'text', message: '={{ $json.body }}',
-    options: { sendTo: "={{ $('config').first().json.ownerEmail }}" },
-  }, { credentials: CRED.gmail, notes: PHASE2, retryOnFail: false });
-  code('Record', [3020, 80], `
-// Phase 2 derives draft state from the Gmail responses (a 404 on update is 'gone').
-const cfg = $('config').first().json;
-const p = $('Plan').first().json;
-const r = $('Review').first().json;
-const d = $('Draft').first().json;
-const computed = $('Compute').first().json;
-const draftState = { update: 'updated', create: 'created', gone: 'gone', skip: 'skipped' }[d.action];
-const reason = r.reason || (d.action === 'skip' ? d.skip : '');
-const modelCalls = computed.modelNeeded ? 1 : 0;
-const draftId = d.action === 'create' ? String(($('Create draft').first().json || {}).id || '') : (d.draftId || '');
-const row = M.steps.record({ cfg, plan: p, computed, status: r.status, reason, docId: d.docId, draftId, draftState, modelCalls, usage: null, runtimeS: 0 });
-return [{ json: { row } }];
-`);
-  http('Append ledger', [3240, 80], 'drive', {
-    method: 'POST',
-    url: "={{ 'https://sheets.googleapis.com/v4/spreadsheets/' + $('config').first().json.ledgerSheetId + '/values/' + encodeURIComponent($('config').first().json.ledgerTab + '!A1:P1') + ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS' }}",
-    json: '={{ JSON.stringify({ values: [$json.row] }) }}',
-  });
 
-  chain('config', 'Read ledger', 'Plan', 'Read HubSpot deals', 'Read HubSpot contacts', 'Read HubSpot tasks', 'Read weekly sheet', 'Read definitions', 'Normalise', 'Compute', 'Model needed?');
+  // ---------------- the Doc: update by id; a 404 recreates it; else create in the Pulse folder (D-017)
+  ifNode('Doc exists?', [2140, -100], "={{ !!$('Plan').first().json.prior.docId }}");
+  http('Update Doc', [2360, -220], 'drive', {
+    method: 'PATCH', url: "={{ 'https://www.googleapis.com/upload/drive/v3/files/' + $('Plan').first().json.prior.docId + '?uploadType=multipart&supportsAllDrives=true' }}",
+    raw: "={{ $('Render').first().json.upload.update }}", rawType: "={{ $('Render').first().json.upload.contentType }}", options: FULL,
+  }, ONCE);
+  ifNode('Doc gone?', [2580, -220], '={{ $json.statusCode === 404 }}');
+  http('Create Doc', [2800, -20], 'drive', {
+    method: 'POST', url: 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true',
+    raw: "={{ $('Render').first().json.upload.create }}", rawType: "={{ $('Render').first().json.upload.contentType }}",
+  }, ONCE);
+  code('Doc written', [3020, -100], `
+const p = $('Plan').first().json;
+const out = M.steps.docOutcome({ priorDocId: p.prior.docId, updated: $('Update Doc').isExecuted ? $('Update Doc').first().json : null, created: $('Create Doc').isExecuted ? $('Create Doc').first().json : null });
+return [{ json: out }];
+`);
+  ifNode('Doc ok?', [3240, -100], '={{ $json.ok }}');
+
+  // ---------------- the draft: update by PUT drafts/{id} (404 = gone, not recreated); else Create draft
+  code('Draft', [3460, -200], `
+const cfg = $('config').first().json;
+return [{ json: M.steps.draftAction({ cfg, plan: $('Plan').first().json, computed: $('Compute').first().json, rendered: $('Render').first().json, docId: $('Doc written').first().json.docId }) }];
+`);
+  ifNode('Update draft?', [3680, -200], "={{ $json.action === 'update' }}");
+  http('Update draft', [3900, -320], 'gmail', {
+    method: 'PUT', url: "={{ 'https://gmail.googleapis.com/gmail/v1/users/me/drafts/' + $('Draft').first().json.draftId }}",
+    json: "={{ JSON.stringify({ id: $('Draft').first().json.draftId, message: { raw: $('Draft').first().json.raw } }) }}", options: FULL,
+  }, ONCE);
+  ifNode('Create draft?', [3900, -100], "={{ $json.action === 'create' }}");
+  // Gmail 2.1 draft/create (n8n-nodes-base 2.49.8, Google/Gmail/v2). No automatic retry: a create that timed
+  // out but succeeded would leave a second draft (N7 D-33).
+  node('Create draft', 'n8n-nodes-base.gmail', 2.1, [4120, -100], {
+    resource: 'draft', operation: 'create', subject: "={{ $('Draft').first().json.subject }}", emailType: 'text', message: "={{ $('Draft').first().json.body }}",
+    options: { sendTo: "={{ $('Draft').first().json.to }}" },
+  }, { credentials: CRED.gmail, ...ONCE });
+
+  // ---------------- every main path ends in Record; the error run in Error row; both feed Outcome
+  code('Record', [4340, 0], `
+const cfg = $('config').first().json;
+const ran = (n) => $(n).isExecuted;
+const one = (n) => $(n).first().json;
+const norm = one('Normalise');
+const doc = ran('Doc written') ? one('Doc written') : null;
+const computed = ran('Compute') ? one('Compute') : null;
+const modelCalls = computed && computed.modelNeeded ? 1 : 0;
+const resp = modelCalls ? one('Anthropic') : null;
+const out = M.steps.finish({
+  cfg, plan: one('Plan'), computed, reviewed: ran('Review') ? one('Review') : null,
+  failure: norm.failure || (doc && !doc.ok ? doc.failure : null), docId: doc && doc.ok ? doc.docId : '',
+  mail: ran('Draft') ? one('Draft') : null, created: ran('Create draft') ? one('Create draft') : null, updated: ran('Update draft') ? one('Update draft') : null,
+  usage: resp && !M.steps.isError(resp) ? resp.usage || null : null, modelCalls,
+  runtimeS: Math.max(0, Math.floor((Date.parse(new Date().toISOString()) - Date.parse(cfg._runAt)) / 1000)),
+});
+return [{ json: out }];
+`);
+  code('Error row', [-940, 300], `
+const cfg = $('config').first().json;
+return [{ json: M.steps.errorRun({ cfg, runAtIso: cfg._runAt, node: cfg._error.node }) }];
+`);
+  code('Outcome', [4560, 100], `
+return [{ json: $input.first().json }];
+`, { lib: false });
+  // The ledger append tries 3 times and then continues, so a failed append is logged in the errors tab.
+  append('Append ledger', [4780, 100], 'ledgerTab', 'A1:P1', "$('Outcome').first().json.row", { ...READ, executeOnce: true });
+  code('After ledger', [5000, 100], `
+const cfg = $('config').first().json;
+const sd = $getWorkflowStaticData('global');
+const out = M.steps.afterLedger({ cfg, outcome: $('Outcome').first().json, appendFailed: M.steps.isError($input.first().json), lastAlertAt: sd.lastAlertAt || '', nowIso: new Date().toISOString() });
+sd.lastAlertAt = out.lastAlertAt;
+return [{ json: out }];
+`);
+  ifNode('Log error?', [5220, 100], '={{ !!$json.errorRow }}');
+  append('Append error row', [5440, 0], 'errorsTab', 'A1:D1', "$('After ledger').first().json.errorRow", READ);
+  ifNode('Alert?', [5660, 0], "={{ !!$('After ledger').first().json.alert }}");
+  // Optional webhook line (D-018): codes only; never an email node.
+  http('Alert webhook', [5880, -100], null, {
+    method: 'POST', url: "={{ $('config').first().json.alertWebhookUrl }}", json: "={{ JSON.stringify($('After ledger').first().json.alert) }}",
+  }, ONCE);
+
+  link('Error run?', 'Error row', 0);
+  link('Error run?', 'Read ledger', 1);
+  chain('Read ledger', 'Plan', 'Read HubSpot deals', 'Read HubSpot contacts', 'Read HubSpot tasks', 'Read weekly sheet', 'Read definitions', 'Normalise', 'Sources ok?');
+  link('Sources ok?', 'Compute', 0);
+  link('Sources ok?', 'Record', 1);
+  link('Compute', 'Model needed?');
   link('Model needed?', 'Anthropic', 0);
   link('Model needed?', 'Review', 1);
   link('Anthropic', 'Review');
   chain('Review', 'Render', 'Doc exists?');
   link('Doc exists?', 'Update Doc', 0);
   link('Doc exists?', 'Create Doc', 1);
-  link('Update Doc', 'Draft');
-  link('Create Doc', 'Draft');
+  link('Update Doc', 'Doc gone?');
+  link('Doc gone?', 'Create Doc', 0);
+  link('Doc gone?', 'Doc written', 1);
+  link('Create Doc', 'Doc written');
+  link('Doc written', 'Doc ok?');
+  link('Doc ok?', 'Draft', 0);
+  link('Doc ok?', 'Record', 1);
   link('Draft', 'Update draft?');
   link('Update draft?', 'Update draft', 0);
   link('Update draft?', 'Create draft?', 1);
@@ -188,22 +281,12 @@ return [{ json: { row } }];
   link('Create draft?', 'Record', 1);
   link('Update draft', 'Record');
   link('Create draft', 'Record');
-  link('Record', 'Append ledger');
-
-  // ---------------- error path: an `errors` tab row, never an email (an optional webhook is Phase 2)
-  node('Error Trigger', 'n8n-nodes-base.errorTrigger', 1, [-1600, 400], {});
-  code('Error row', [-1380, 400], `
-const e = $input.first().json;
-const node = String((e.execution && e.execution.lastNodeExecuted) || 'unknown').replace(/[^A-Za-z0-9 /_-]/g, '').slice(0, 60) || 'unknown';
-const reason = /HubSpot/.test(node) ? 'hubspot_error' : /sheet|ledger|definitions/i.test(node) ? 'sheet_error' : /Doc/.test(node) ? 'drive_error' : /draft/i.test(node) ? 'gmail_error' : /Anthropic/.test(node) ? 'model_error' : 'unknown_error';
-return [{ json: { row: M.steps.errorRow({ runAtIso: new Date().toISOString(), runId: '', node, reason }) } }];
-`);
-  http('Append error row', [-1160, 400], 'drive', {
-    method: 'POST',
-    url: "={{ 'https://sheets.googleapis.com/v4/spreadsheets/' + $('config').first().json.ledgerSheetId + '/values/' + encodeURIComponent($('config').first().json.errorsTab + '!A1:D1') + ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS' }}",
-    json: '={{ JSON.stringify({ values: [$json.row] }) }}',
-  });
-  chain('Error Trigger', 'Error row', 'Append error row');
+  link('Record', 'Outcome');
+  link('Error row', 'Outcome');
+  chain('Outcome', 'Append ledger', 'After ledger', 'Log error?');
+  link('Log error?', 'Append error row', 0);
+  chain('Append error row', 'Alert?');
+  link('Alert?', 'Alert webhook', 0);
 
   return {
     id: WORKFLOW_ID,
@@ -211,12 +294,14 @@ return [{ json: { row: M.steps.errorRow({ runAtIso: new Date().toISOString(), ru
     active: false,
     nodes,
     connections,
+    // No errorWorkflow here: an id set in the file breaks when the editor import assigns a new id (D-067,
+    // D-073). docs/SETUP.md step 5 sets Error workflow to this workflow after import.
     settings: {
-      executionOrder: 'v1', timezone: 'America/Chicago', errorWorkflow: WORKFLOW_ID,
+      executionOrder: 'v1', timezone: 'America/Chicago',
       saveDataSuccessExecution: 'none', saveDataErrorExecution: 'all', saveManualExecutions: false, callerPolicy: 'workflowsFromSameOwner',
     },
     pinData: {},
-    meta: { promptVersion: require('../src/prompt').versionOf(prompts.text), builtBy: 'scripts/build-workflow.js', phase: 'Phase 1 skeleton' },
+    meta: { promptVersion: require('../src/prompt').versionOf(prompts.text), builtBy: 'scripts/build-workflow.js', phase: 'Phase 2 (wired; executed offline by test/n8n-sim.js only)' },
     tags: [],
   };
 }

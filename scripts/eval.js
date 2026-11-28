@@ -30,4 +30,20 @@ for (const v of VARIANTS) {
 console.log('Golden weeks (PRD §9) through the step harness; model text is recorded stand-ins, not model output.\n');
 console.log(rows.join('\n'));
 console.log(`\n${ok}/${total} golden weeks (incl. E01-truncated) match their expected files; ${vOk}/${VARIANTS.length} check variants give their reason.`);
-if (ok !== total || vOk !== VARIANTS.length) process.exit(1);
+
+// Phase 2: the same weeks through workflow.json itself (test/n8n-sim.js, in-memory fakes; not a live n8n).
+const S = require('../test/simrun');
+(async () => {
+  let simOk = 0;
+  for (const w of [...WEEKS, TRUNCATED]) {
+    const e = H.loadExpected(w.id);
+    const h = H.runWeek(w.id);
+    const s = await S.runSim(w.id);
+    const mask = (row) => row.map((v, i) => (i === 14 ? '' : String(v)));
+    const row = s.ledgerRows[0] || [];
+    if (s.ledgerRows.length === 1 && JSON.stringify(mask(row)) === JSON.stringify(mask(h.ledgerRow)) && row[2] === e.outcome && row[3] === e.reason && s.modelCalls.length === e.modelCalls) simOk++;
+    else console.log(`${w.id}: n8n-sim DIFF ${JSON.stringify(row)}`);
+  }
+  console.log(`${simOk}/${total} golden weeks replayed through workflow.json by test/n8n-sim.js give the same ledger row, outcome, reason and model calls.`);
+  if (ok !== total || vOk !== VARIANTS.length || simOk !== total) process.exit(1);
+})();
