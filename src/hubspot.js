@@ -75,4 +75,13 @@ function collectPages(pages, maxPages) {
   return { records, truncated: read.length === maxPages && !!(last && last.paging && last.paging.next) };
 }
 
-module.exports = { DEMO_PREFIX, DEMO_TLD, isDemoName, isDemoEmail, normalise, normaliseDeal, collectPages };
+// Pages as the n8n HTTP Request node returns them with pagination on (one item per page body, D-072). The node
+// stops at its own "Max Pages"; cfg.hubspotMaxPages may be lower, so pages past it are dropped here. The read is
+// truncated when the last page kept still points to a next page, whichever limit stopped it.
+function fromPagedRead(pages, maxPages) {
+  const read = (pages || []).slice(0, maxPages);
+  const last = read[read.length - 1];
+  return { records: read.flatMap((p) => p.results || []), truncated: !!(last && last.paging && last.paging.next) };
+}
+
+module.exports = { DEMO_PREFIX, DEMO_TLD, isDemoName, isDemoEmail, normalise, normaliseDeal, collectPages, fromPagedRead };

@@ -27,6 +27,7 @@ const REASON_WORDS = {
   sheet_error: 'the weekly sheet or the ledger could not be read',
   drive_error: 'the page could not be saved to Drive',
   gmail_error: 'the draft email could not be saved',
+  unknown_error: 'the run stopped on an unexpected error',
   demo_guard_recipient: 'the owner address is outside the demo set, so no draft was made',
 };
 
