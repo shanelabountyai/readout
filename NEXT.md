@@ -1,6 +1,35 @@
 # Next
 
-**Open: Shane reviews `docs/PHASE-2-PLAN.md` and the "Decisions for Shane to confirm" in the Phase 1 PR.** Do not start Phase 2 wiring until the Phase 1 PR is merged and the plan is reviewed (phase gate).
+**Open: Shane reviews `docs/PHASE-3-PLAN.md` and the Phase 2 PR ("readout: Phase 2 (n8n wiring + simulator)").** Do not start Phase 3 until the Phase 2 PR is merged and the plan is reviewed (phase gate). The SETUP hand steps are Phase 3 and have not been done.
+
+## 2026-11-27 — Phase 2 (unattended run, branch `phase-2`, on Shane's "go on defaults")
+
+### Built
+
+- `workflow.json` wired (from `scripts/build-workflow.js`; never hand-edited): HubSpot paged GETs (`after` cursor, Max Pages 20, deals 50 a page with `dealstage` history); Sheets `values.get` for the ledger, `weekly`, `definitions`; every read 3 tries then an error item routed to a `failed` run; Anthropic `POST /v1/messages` with `anthropic-version`, one try, `model_error` path, usage into the ledger; Drive multipart create into `Pulse` / `PATCH` update by id / 404 recreates; Gmail node Create draft (one try) / `PUT drafts/{id}` with an RFC 822 `raw` / 404 = `gone`; ledger append, `errors` row, optional throttled webhook; Error Trigger feeds `config` (D-073); `errorWorkflow` removed from the export (set after import).
+- `src/mime.js` (pure UTF-8/base64, RFC 822 message, Drive multipart); new steps in `src/steps.js` (`sourceFailure`, `docBodies`, `docOutcome`, `draftAction`, `finish`, `errorRun`, `afterLedger`); `hubspot.fromPagedRead`; ledger reason `unknown_error`.
+- `test/n8n-sim.js` (executes `workflow.json` against in-memory fakes, with failure injection and a request log), `test/simrun.js`, sim tests in `test/workflow.test.js`, `test/mime.test.js`, `test/wiring.test.js`; `npm run eval` also replays the golden weeks through the simulator.
+- `docs/SETUP.md`, `docs/PHASE-3-PLAN.md` (for review).
+
+### Gate output (local, Node v22.23.5, npm 10.9.9)
+
+- `npm ci`: ok. `npm run gate`: lint clean; `check`: workflow.json and fixtures (69 files) up to date; **200 tests, 200 pass, 0 fail**.
+- `npm run eval`: 21/21 golden weeks match their expected files; 7/7 check variants; **21/21 golden weeks replayed through `workflow.json` by `test/n8n-sim.js` give the same ledger row, outcome, reason and model calls** as the step harness.
+- `npm run build` then `npm run check`: no drift.
+- CI: see the PR (recorded there after the push).
+
+### Decided
+
+D-070 to D-079 in `docs/DECISIONS.md`. D-079 records the independent review: 2 MUST-FIX (both fixed), 6 SHOULD-FIX (3 fixed, rest listed in the PR and PHASE-3-PLAN item 6).
+
+### Left open
+
+- PRD §14 items that need the live portal (D-077 lists which were checked against vendor docs and which remain): tasks read scope, page size with history, `closedate`, `notes_last_updated`, `FORMATTED_VALUE`, Drive HTML rendering, `Intl` and node shapes on Shane's n8n.
+- Review gaps in D-079: error workflow on manual runs; trashed Doc; failed ledger append after creates; id-with-no-digit refusal; throttle stamped before the POST; retry mechanism modelled, not verified.
+
+### Could not run in the cloud
+
+- No live n8n, HubSpot, Google or Anthropic call was made or attempted; nothing imported or deployed; schedule ships off. Network use: npm registry (`npm ci`; `npm pack` of `n8n-nodes-base` and `@n8n/n8n-nodes-langchain` 2.49.8 into a scratch folder to read node source, not added as dependencies), a read-only clone of N7 for its simulator, and vendor documentation pages read for D-077.
 
 ## 2026-11-27 — Phase 1 (unattended run, branch `kickoff`)
 

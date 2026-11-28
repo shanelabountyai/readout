@@ -58,7 +58,9 @@ or Import from File in the editor. Then open the workflow:
 
 ## 5. Error workflow (set it after import)
 
-Open **Workflow Settings → Error workflow** and choose **this workflow itself**. The export does not carry it, because the editor import assigns a new id and a stale id would point nowhere (D-073). The Error Trigger then feeds the same `config` node, so a crash the main path did not catch leaves an `errors` row and a `failed` ledger row.
+Open **Workflow Settings → Error workflow** and choose **this workflow itself**. The export does not carry it, because the editor import assigns a new id and a stale id would point nowhere (D-073). The Error Trigger feeds the same `config` node, so when n8n does run the error workflow, a crash the main path did not catch leaves an `errors` row and a `failed` ledger row.
+
+**Not verified, and probably not the case on manual runs (D-079):** n8n may run error workflows only for automatic (scheduled) executions, not for *Execute workflow* runs, and a workflow that contains an Error Trigger may act as its own error workflow without this setting. So during the hand-run demo a crash in a Code node (Render, Draft, Record) may leave **no** ledger row and **no** `errors` row; if it happened after the model call, that call is not counted toward `weeklyCallCap`. Check the `runs` tab after every manual run; if a run left no row, look at the execution in n8n before running again.
 
 Leave "Save successful production executions" off (the export sets `saveDataSuccessExecution: none`, D-029): CRM data would otherwise sit in execution history.
 
