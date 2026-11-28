@@ -214,8 +214,9 @@ for (const w of [...WEEKS, TRUNCATED]) {
     assert.strictEqual(row[3], e.reason, 'reason');
     assert.strictEqual(s.modelCalls.length, e.modelCalls, 'model calls');
     assert.strictEqual(row[10], String(e.modelCalls));
-    const wantFlags = e.flags || h.flags.map(FL.label);
-    assert.deepStrictEqual(h.flags.map(FL.label), wantFlags);
+    const simFlags = s.out('Compute') ? s.out('Compute').flags.map(FL.label) : [];
+    if (e.flags) assert.deepStrictEqual(simFlags, e.flags, 'flags computed inside workflow.json');
+    assert.deepStrictEqual(simFlags, h.flags.map(FL.label), 'flags equal the harness');
     assert.strictEqual(row[4], [...new Set(h.flags.map((f) => f.code))].join('|'), 'flags column');
     if (e.check !== undefined && e.check !== null && s.out('Review')) assert.strictEqual(s.out('Review').check.pass ? 'pass' : s.out('Review').check.reason, e.check, 'check');
     if (e.facts) assert.deepStrictEqual(Object.fromEntries(s.out('Compute').facts.map((f) => [f.id, f.rendering])), e.facts, 'facts');
@@ -413,6 +414,14 @@ test('Error Trigger (D-067, D-073): the error execution reads config, writes an 
   assert.deepStrictEqual(third.errorRows.map((r) => r[3]), ['hubspot_error']);
   assert.strictEqual(first.env.alerts.length, 2);
   checkLog([...first.log, ...second.log, ...third.log]);
+});
+
+test('D-079: an Error Trigger payload without "execution" (a trigger failure) still takes the error path, never a full run', async () => {
+  const items = [{ json: { trigger: { error: { message: 'activation failed' }, mode: 'trigger' }, workflow: { id: S.WF.id, name: S.WF.name } } }];
+  const s = await S.runSim('E01', { trigger: 'Error Trigger', triggerItems: items });
+  assert.ok(!s.r.order.includes('Read ledger') && !s.r.order.includes('Read HubSpot deals'));
+  assert.deepStrictEqual(s.errorRows.map((r) => r.slice(2)), [['trigger', 'unknown_error']]);
+  assert.strictEqual(s.modelCalls.length, 0);
 });
 
 test('no alert webhook configured: errors go to the errors tab only', async () => {

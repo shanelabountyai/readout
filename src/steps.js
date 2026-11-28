@@ -184,14 +184,13 @@ function finish({ cfg, plan: p, computed = null, reviewed = null, failure = null
 
 // The Error Trigger execution (a crash the main path did not catch): it has config (the trigger feeds the
 // `config` node, D-073) but not the failed run's nodes, so its run id and week come from the error time.
-function errorReasonFor(node) {
-  if (/HubSpot/.test(node)) return 'hubspot_error';
-  if (/sheet|ledger|definitions|error row/i.test(node)) return 'sheet_error';
-  if (/Doc/.test(node)) return 'drive_error';
-  if (/draft/i.test(node)) return 'gmail_error';
-  if (/Anthropic/.test(node)) return 'model_error';
-  return 'unknown_error';
-}
+// Exact node names only (D-079): a crash in a Code node such as Draft or Doc written is unknown_error, not a vendor error.
+const NODE_REASON = {
+  'Read HubSpot deals': 'hubspot_error', 'Read HubSpot contacts': 'hubspot_error', 'Read HubSpot tasks': 'hubspot_error',
+  'Read ledger': 'sheet_error', 'Read weekly sheet': 'sheet_error', 'Read definitions': 'sheet_error', 'Append ledger': 'sheet_error', 'Append error row': 'sheet_error',
+  'Create Doc': 'drive_error', 'Update Doc': 'drive_error', 'Create draft': 'gmail_error', 'Update draft': 'gmail_error', Anthropic: 'model_error',
+};
+function errorReasonFor(node) { return Object.prototype.hasOwnProperty.call(NODE_REASON, node) ? NODE_REASON[node] : 'unknown_error'; }
 function errorRun({ cfg, runAtIso, node }) {
   const p = plan({ cfg, runAtIso, ledgerValues: [] });
   const clean = String(node || '').replace(/[^A-Za-z0-9 /_-]/g, '').slice(0, 60) || 'unknown';

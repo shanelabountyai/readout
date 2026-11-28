@@ -105,8 +105,10 @@ function build() {
 // THE ONLY ACCOUNT-SPECIFIC NODE (CLAUDE.md). Fill in the REPLACE_WITH_ values (docs/SETUP.md).
 const cfg = ${JSON.stringify(cfg, null, 2)};
 // The Error Trigger also feeds this node, so the error path reads the same config (D-073).
+// The switch is which trigger ran, not the payload's shape (a trigger failure carries no "execution", D-079).
 const t = $input.first().json || {};
-const _error = t.execution && t.workflow ? { node: String(t.execution.lastNodeExecuted || ''), executionId: String(t.execution.id || '') } : null;
+const ex = t.execution || {};
+const _error = $('Error Trigger').isExecuted ? { node: String(ex.lastNodeExecuted || (t.trigger ? 'trigger' : '')), executionId: String(ex.id || '') } : null;
 return [{ json: { ...cfg, _runAt: new Date().toISOString().replace(/\\.\\d{3}Z$/, 'Z'), _error } }];
 `, { lib: false });
   link('Schedule (Mon 10:00 America/Chicago)', 'config');

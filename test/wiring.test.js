@@ -60,8 +60,8 @@ test('finish: a source failure gives the D-063 row and an errors row; usage reac
 });
 
 test('errorRun and errorReasonFor: error-trigger rows from config and the error time; node names cleaned', () => {
-  assert.deepStrictEqual(['Read HubSpot tasks', 'Read weekly sheet', 'Append ledger', 'Update Doc', 'Create draft', 'Anthropic', 'Render'].map(S.errorReasonFor),
-    ['hubspot_error', 'sheet_error', 'sheet_error', 'drive_error', 'gmail_error', 'model_error', 'unknown_error']);
+  assert.deepStrictEqual(['Read HubSpot tasks', 'Read weekly sheet', 'Append ledger', 'Update Doc', 'Create draft', 'Anthropic', 'Render', 'Draft', 'Doc written', 'trigger', 'constructor'].map(S.errorReasonFor),
+    ['hubspot_error', 'sheet_error', 'sheet_error', 'drive_error', 'gmail_error', 'model_error', 'unknown_error', 'unknown_error', 'unknown_error', 'unknown_error', 'unknown_error']);
   const r = S.errorRun({ cfg: H.baseCfg, runAtIso: '2026-11-23T16:00:00Z', node: 'Render<script>' });
   assert.deepStrictEqual(r.errorRow, ['2026-11-23T16:00:00Z', 'run-20261123160000', 'Renderscript', 'unknown_error']);
   assert.deepStrictEqual(r.row.slice(0, 4), ['run-20261123160000', '2026-11-16', 'failed', 'unknown_error']);
